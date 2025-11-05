@@ -32,7 +32,9 @@ export const config = {
   
   frontend: {
     url: process.env.FRONTEND_URL || 'http://localhost:5173',
+    secondaryUrl: process.env.AI_FORM_BUILDER_URL || 'http://localhost:3000',
   },
+  genaiServiceUrl: process.env.GENAI_SERVICE_URL || 'http://localhost:4002',
   
   oauth_callback_base_url: process.env.OAUTH_CALLBACK_BASE_URL || 'http://localhost:3001/api/auth',
   

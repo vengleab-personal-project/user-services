@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { logger } from '../utils/logger';
+import { config } from '../config';
 
 /**
  * Global error handler middleware
@@ -55,7 +56,7 @@ export const errorHandler = (error: Error, req: Request, res: Response, next: Ne
   // Default error
   res.status(500).json({
     error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
+    message: config.env === 'development' ? error.message : 'Something went wrong',
   });
 };
 

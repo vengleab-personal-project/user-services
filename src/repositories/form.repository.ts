@@ -49,7 +49,7 @@ export class FormRepository {
   /**
    * Find public forms
    */
-  async findPublicForms(limit: number = 20): Promise<Form[]> {
+  async findPublicForms(_limit: number = 20): Promise<Form[]> {
     return await DynamoDBUtils.scan<Form>(
       TableNames.Forms,
       '#visibility = :visibility',

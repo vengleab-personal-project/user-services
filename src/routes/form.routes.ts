@@ -5,8 +5,9 @@ import { checkAbac } from '../middleware/abac.middleware';
 import { checkLimits } from '../middleware/usageTracking.middleware';
 import { asyncHandler } from '../middleware/error.middleware';
 import { validateBody, createFormSchema, updateFormSchema } from '../utils/validation.utils';
+import { User } from '../models/user.model';
 
-const router = Router();
+const router: Router = Router();
 const formService = new FormService();
 
 /**
@@ -18,8 +19,14 @@ router.post(
   checkLimits('forms'),
   checkAbac('form', 'create'),
   asyncHandler(async (req: Request, res: Response) => {
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
     const formData = validateBody(createFormSchema, req.body);
-    const form = await formService.createForm(req.user!.id, formData);
+    const form = await formService.createForm(user.id, formData);
     res.status(201).json({ form });
   })
 );
@@ -31,8 +38,14 @@ router.get(
   '/',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
     const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
-    const forms = await formService.getUserForms(req.user!.id, limit);
+    const forms = await formService.getUserForms(user.id, limit);
     res.json({ forms, count: forms.length });
   })
 );
@@ -70,12 +83,13 @@ router.get(
 
     // Filter fields based on ABAC policies if user is authenticated
     let filteredForm = form;
-    if (req.user) {
+    const user = req.user as User | undefined;
+    if (user && user.id) {
       filteredForm = await formService.filterFormFields(
         form,
-        req.user.id,
-        req.user.role,
-        req.user.subscriptionTier
+        user.id,
+        user.role,
+        user.subscriptionTier
       );
     }
 
@@ -102,7 +116,13 @@ router.patch(
     }
 
     // Check ownership
-    if (form.userId !== req.user!.id && req.user!.role !== 'admin') {
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
+    if (form.userId !== user.id && user.role !== 'admin') {
       res.status(403).json({ error: 'Not authorized to update this form' });
       return;
     }
@@ -133,12 +153,18 @@ router.delete(
     }
 
     // Check ownership
-    if (form.userId !== req.user!.id && req.user!.role !== 'admin') {
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
+    if (form.userId !== user.id && user.role !== 'admin') {
       res.status(403).json({ error: 'Not authorized to delete this form' });
       return;
     }
 
-    await formService.deleteForm(req.params.formId, req.user!.id);
+    await formService.deleteForm(req.params.formId, user.id);
 
     res.json({ message: 'Form deleted successfully' });
   })
@@ -151,7 +177,13 @@ router.get(
   '/count/me',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
-    const count = await formService.countUserForms(req.user!.id);
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
+    const count = await formService.countUserForms(user.id);
     res.json({ count });
   })
 );

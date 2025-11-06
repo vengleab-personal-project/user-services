@@ -4,7 +4,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { asyncHandler } from '../middleware/error.middleware';
 import { User } from '../models/user.model';
 
-const router = Router();
+const router: Router = Router();
 const usageService = new UsageService();
 
 /**

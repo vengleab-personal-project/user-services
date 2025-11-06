@@ -1,4 +1,4 @@
-import { ABACPolicy, PolicyEffect } from '../types/abac.types';
+import { ABACPolicy } from '../types/abac.types';
 
 /**
  * Default ABAC Policies

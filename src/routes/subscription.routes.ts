@@ -7,7 +7,7 @@ import { validateBody, updateSubscriptionSchema } from '../utils/validation.util
 import { SubscriptionTier, BillingCycle } from '../types/subscription.types';
 import { User } from '../models/user.model';
 
-const router = Router();
+const router: Router = Router();
 const subscriptionService = new SubscriptionService();
 const subscriptionRepository = new SubscriptionRepository();
 

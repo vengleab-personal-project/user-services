@@ -6,13 +6,13 @@ import { asyncHandler } from '../middleware/error.middleware';
 import { validateBody } from '../utils/validation.utils';
 import { z } from 'zod';
 
-const router = Router();
+const routes: Router = Router();
 const userRepository = new UserRepository();
 
 /**
  * Get current user profile
  */
-router.get(
+routes.get(
   '/me',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
@@ -32,7 +32,7 @@ router.get(
 /**
  * Update current user profile
  */
-router.patch(
+routes.patch(
   '/me',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
@@ -58,7 +58,7 @@ router.patch(
 /**
  * Get user statistics
  */
-router.get(
+routes.get(
   '/me/stats',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
@@ -75,7 +75,7 @@ router.get(
 /**
  * Admin: Get all users (ABAC protected)
  */
-router.get(
+routes.get(
   '/',
   authenticate,
   checkAbac('user', 'list'),
@@ -89,7 +89,7 @@ router.get(
 /**
  * Admin: Get user by ID (ABAC protected)
  */
-router.get(
+routes.get(
   '/:userId',
   authenticate,
   checkAbac('user', 'read', async (req) => {
@@ -112,7 +112,7 @@ router.get(
 /**
  * Admin: Update user (ABAC protected)
  */
-router.patch(
+routes.patch(
   '/:userId',
   authenticate,
   checkAbac('user', 'update', async (req) => {
@@ -136,7 +136,7 @@ router.patch(
 /**
  * Delete current user account
  */
-router.delete(
+routes.delete(
   '/me',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
@@ -150,6 +150,6 @@ router.delete(
   })
 );
 
-export default router;
+export default routes;
 
 

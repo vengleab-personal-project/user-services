@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { SubscriptionService } from '../services/subscription.service';
 import { UsageService } from '../services/usage.service';
 import { QuotaUsage } from '../types/subscription.types';
+import { User } from '../models/user.model';
 
 const subscriptionService = new SubscriptionService();
 const usageService = new UsageService();
@@ -16,7 +17,8 @@ export const checkAndDeductQuota = (
   trackUsage: boolean = true
 ) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    if (!req.user) {
+    const user = req.user as User | undefined;
+    if (!user || !user.id) {
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
@@ -24,7 +26,7 @@ export const checkAndDeductQuota = (
     try {
       // Check if user has available quota
       const quotaCheck = await subscriptionService.checkQuota(
-        req.user.id,
+        user.id,
         resourceType,
         amount
       );
@@ -44,7 +46,7 @@ export const checkAndDeductQuota = (
 
       // Deduct quota for one-off plans (monthly plans track usage separately)
       if (quotaCheck.planType === 'one_off') {
-        await subscriptionService.deductQuota(req.user.id, resourceType, amount);
+        await subscriptionService.deductQuota(user.id, resourceType, amount);
       }
 
       // Track usage for analytics (both monthly and one-off plans)
@@ -53,7 +55,7 @@ export const checkAndDeductQuota = (
           // Track after the request completes successfully
           res.on('finish', () => {
             if (res.statusCode >= 200 && res.statusCode < 300) {
-              usageService.trackAIQuestionsGenerated(req.user!.id, amount, {
+              usageService.trackAIQuestionsGenerated(user.id, amount, {
                 endpoint: req.path,
                 method: req.method,
               }).catch((error) => {
@@ -87,14 +89,15 @@ export const checkAndDeductQuota = (
  */
 export const checkQuotaOnly = (resourceType: keyof QuotaUsage) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    if (!req.user) {
+    const user = req.user as User | undefined;
+    if (!user || !user.id) {
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
 
     try {
       const quotaCheck = await subscriptionService.checkQuota(
-        req.user.id,
+        user.id,
         resourceType,
         1
       );
@@ -127,13 +130,14 @@ export const dailyLimit = (maxPerDay: number, resourceKey: string) => {
   const dailyUsage = new Map<string, { count: number; date: string }>();
 
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    if (!req.user) {
+    const user = req.user as User | undefined;
+    if (!user || !user.id) {
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
 
     const today = new Date().toISOString().split('T')[0];
-    const key = `${req.user.id}:${resourceKey}:${today}`;
+    const key = `${user.id}:${resourceKey}:${today}`;
     
     const usage = dailyUsage.get(key);
     

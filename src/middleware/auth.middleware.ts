@@ -43,7 +43,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
  * Optional authentication middleware
  * Attaches user if token is valid, but doesn't fail if no token
  */
-export const optionalAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const optionalAuth = async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
   try {
     const token = JWTService.extractTokenFromHeader(req.headers.authorization);
 

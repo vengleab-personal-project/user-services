@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { UsageService } from '../services/usage.service';
+import { User } from '../models/user.model';
 
 const usageService = new UsageService();
 
@@ -7,10 +8,11 @@ const usageService = new UsageService();
  * Usage tracking middleware
  * Tracks API calls for billing purposes
  */
-export const trackUsage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  if (req.user) {
+export const trackUsage = async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+  const user = req.user as User | undefined;
+  if (user && user.id) {
     // Track in background (non-blocking)
-    usageService.trackApiCall(req.user.id, req.path, {
+    usageService.trackApiCall(user.id, req.path, {
       method: req.method,
       path: req.path,
       userAgent: req.headers['user-agent'],
@@ -28,7 +30,8 @@ export const trackUsage = async (req: Request, res: Response, next: NextFunction
  */
 export const checkLimits = (limitType: 'forms' | 'fields' | 'apiCalls') => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    if (!req.user) {
+    const user = req.user as User | undefined;
+    if (!user || !user.id) {
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
@@ -37,7 +40,7 @@ export const checkLimits = (limitType: 'forms' | 'fields' | 'apiCalls') => {
       const { SubscriptionService } = await import('../services/subscription.service');
       const subscriptionService = new SubscriptionService();
 
-      const limits = await subscriptionService.checkLimits(req.user.id);
+      const limits = await subscriptionService.checkLimits(user.id);
 
       let allowed = false;
       switch (limitType) {
@@ -58,8 +61,8 @@ export const checkLimits = (limitType: 'forms' | 'fields' | 'apiCalls') => {
           limitType,
           limits: limits.limits,
           usage: limits.usage,
-          message: `You've reached your ${limitType} limit for your ${req.user.subscriptionTier} subscription`,
-          upgrade: req.user.subscriptionTier === 'free' ? 'Upgrade to Pro for higher limits' : undefined,
+          message: `You've reached your ${limitType} limit for your ${user.subscriptionTier} subscription`,
+          upgrade: user.subscriptionTier === 'free' ? 'Upgrade to Pro for higher limits' : undefined,
         });
         return;
       }

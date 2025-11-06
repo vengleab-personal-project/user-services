@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { SubscriptionService } from '../services/subscription.service';
 import { QuotaLimits } from '../types/subscription.types';
+import { User } from '../models/user.model';
 
-export const quotaRouter = Router();
+export const quotaRouter: Router = Router();
 const subscriptionService = new SubscriptionService();
 
 /**
@@ -110,9 +111,15 @@ quotaRouter.post('/check', async (req, res) => {
       return;
     }
     
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
     // Check quota
     const quotaCheck = await subscriptionService.checkQuota(
-      req.user.id,
+      user.id,
       resourceType,
       amount
     );
@@ -133,7 +140,7 @@ quotaRouter.post('/check', async (req, res) => {
     
     // Deduct quota for one-off plans
     if (quotaCheck.planType === 'one_off') {
-      await subscriptionService.deductQuota(req.user.id, resourceType, amount);
+      await subscriptionService.deductQuota(user.id, resourceType, amount);
     }
     
     res.json({
@@ -157,12 +164,13 @@ quotaRouter.post('/check', async (req, res) => {
  */
 quotaRouter.get('/status', async (req, res) => {
   try {
-    if (!req.user) {
+    const user = req.user as User | undefined;
+    if (!user || !user.id) {
       res.status(401).json({ error: 'Authentication required' });
       return;
     }
     
-    const subscription = await subscriptionService.getUserSubscription(req.user.id);
+    const subscription = await subscriptionService.getUserSubscription(user.id);
     
     if (!subscription) {
       res.status(404).json({ error: 'Subscription not found' });
@@ -189,7 +197,7 @@ quotaRouter.get('/status', async (req, res) => {
     
     for (const resourceType of resourceTypes) {
       try {
-        const check = await subscriptionService.checkQuota(req.user.id, resourceType, 1);
+        const check = await subscriptionService.checkQuota(user.id, resourceType, 1);
         quotaStatus.resources[resourceType] = {
           remaining: check.remaining,
           isUnlimited: check.isUnlimited,
@@ -233,8 +241,14 @@ quotaRouter.post('/purchase', async (req, res) => {
     // TODO: Add payment processing here
     // For now, just grant the quota
     
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
     const subscription = await subscriptionService.purchaseQuotaPackage(
-      req.user.id,
+      user.id,
       quotaLimits
     );
     

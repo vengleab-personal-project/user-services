@@ -3,7 +3,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { PolicyRepository } from '../repositories/policy.repository';
 import { logger } from '../utils/logger';
 
-const router = Router();
+const router: Router = Router();
 const policyRepository = new PolicyRepository();
 
 // List all policies (admin only)

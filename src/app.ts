@@ -62,7 +62,7 @@ export const createApp = (): Application => {
 
   // Optional authentication (attach user if token present, but don't fail)
   // This must run BEFORE rate limiting so it can see the user tier
-  app.use(async (req, res, next) => {
+  app.use(async (req, _res, next) => {
     try {
       const authHeader = req.headers.authorization;
       if (authHeader) {
@@ -94,7 +94,7 @@ export const createApp = (): Application => {
   app.use(trackUsage);
 
   // Request logging
-  app.use((req, res, next) => {
+  app.use((req, _res, next) => {
     logger.info('Incoming request', {
       method: req.method,
       path: req.path,
@@ -105,7 +105,7 @@ export const createApp = (): Application => {
   });
 
   // Health check endpoint
-  app.get('/health', (req, res) => {
+  app.get('/health', (_req, res) => {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),

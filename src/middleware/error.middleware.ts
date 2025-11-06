@@ -2,17 +2,19 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { logger } from '../utils/logger';
 import { config } from '../config';
+import { User } from '../models/user.model';
 
 /**
  * Global error handler middleware
  */
-export const errorHandler = (error: Error, req: Request, res: Response, next: NextFunction): void => {
+export const errorHandler = (error: Error, req: Request, res: Response, _next: NextFunction): void => {
+  const user = req.user as User | undefined;
   logger.error('Error occurred', {
     error: error.message,
     stack: error.stack,
     path: req.path,
     method: req.method,
-    userId: req.user?.id,
+    userId: user?.id,
   });
 
   // Zod validation errors

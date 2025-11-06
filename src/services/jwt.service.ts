@@ -18,7 +18,7 @@ export class JWTService {
 
     const options: SignOptions = {
       expiresIn: config.jwt.expiresIn,
-    };
+    } as SignOptions;
 
     return jwt.sign(payload, config.jwt.secret, options);
   }
@@ -37,7 +37,7 @@ export class JWTService {
 
     const options: SignOptions = {
       expiresIn: config.jwt.refreshExpiresIn,
-    };
+    } as SignOptions;
 
     return jwt.sign(payload, config.jwt.secret, options);
   }

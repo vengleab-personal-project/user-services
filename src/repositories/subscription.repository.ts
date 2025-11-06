@@ -1,7 +1,7 @@
 import { Subscription } from '../models/subscription.model';
 import { DynamoDBUtils } from '../utils/dynamodb.utils';
 import { TableNames } from '../config/dynamodb.config';
-import { SubscriptionTier, SubscriptionLimits } from '../types/subscription.types';
+import { SubscriptionTier, SubscriptionLimits, PlanType } from '../types/subscription.types';
 import { config } from '../config';
 
 export class SubscriptionRepository {
@@ -21,6 +21,7 @@ export class SubscriptionRepository {
       id: DynamoDBUtils.generateId('sub'),
       userId: subscriptionData.userId || '',
       tier,
+      planType: subscriptionData.planType || PlanType.MONTHLY,
       billingCycle: subscriptionData.billingCycle,
       status: subscriptionData.status || 'active',
       limits: this.getLimitsByTier(tier),

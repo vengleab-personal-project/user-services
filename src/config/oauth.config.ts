@@ -31,7 +31,7 @@ if (config.oauth.google.clientId && config.oauth.google.clientSecret) {
         clientSecret: config.oauth.google.clientSecret,
         callbackURL: `${config.oauth_callback_base_url}/google/callback`,
       },
-      async (accessToken, refreshToken, profile, done) => {
+      async (_accessToken, _refreshToken, profile, done) => {
         try {
           // Find or create user
           let user = await userRepository.findByOAuthProvider('google', profile.id);
@@ -70,7 +70,7 @@ if (config.oauth.github.clientId && config.oauth.github.clientSecret) {
         clientSecret: config.oauth.github.clientSecret,
         callbackURL: `${config.oauth_callback_base_url}/github/callback`,
       },
-      async (accessToken: string, refreshToken: string, profile: any, done: any) => {
+      async (_accessToken: string, _refreshToken: string, profile: any, done: any) => {
         try {
           // Find or create user
           let user = await userRepository.findByOAuthProvider('github', profile.id);

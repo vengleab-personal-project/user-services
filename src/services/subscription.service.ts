@@ -319,7 +319,11 @@ export class SubscriptionService {
         throw new Error('Quota limits not configured for one-off plan');
       }
 
-      const limit = (subscription.quotaLimits[resourceType] as number) || 0;
+      // Exclude 'lastUpdated' from QuotaUsage when accessing QuotaLimits
+      const quotaLimitKey = resourceType === 'lastUpdated' ? undefined : resourceType;
+      const limit = quotaLimitKey && quotaLimitKey in subscription.quotaLimits 
+        ? (subscription.quotaLimits[quotaLimitKey as keyof QuotaLimits] as number) || 0
+        : 0;
       const used = (subscription.quotaUsage[resourceType] as number) || 0;
       const remaining = Math.max(0, limit - used);
 

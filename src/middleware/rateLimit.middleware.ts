@@ -1,6 +1,7 @@
 import rateLimit from 'express-rate-limit';
 import { Request, Response } from 'express';
 import { config } from '../config';
+import { User } from '../models/user.model';
 
 /**
  * Create rate limiter based on subscription tier
@@ -10,8 +11,9 @@ export const createRateLimiter = () => {
     windowMs: 60 * 1000, // 1 minute
     max: (req: Request) => {
       // Get user's subscription tier from request
-      if (req.user) {
-        switch (req.user.subscriptionTier) {
+      const user = req.user as User | undefined;
+      if (user && user.subscriptionTier) {
+        switch (user.subscriptionTier) {
           case 'enterprise':
             return config.rateLimit.enterprise;
           case 'pro':
@@ -25,7 +27,8 @@ export const createRateLimiter = () => {
       return 30;
     },
     message: (req: Request) => {
-      const tier = req.user?.subscriptionTier || 'unauthenticated';
+      const user = req.user as User | undefined;
+      const tier = user?.subscriptionTier || 'unauthenticated';
       return {
         error: 'Too many requests',
         message: `Rate limit exceeded for ${tier} tier`,
@@ -36,12 +39,14 @@ export const createRateLimiter = () => {
     legacyHeaders: false,
     // Use user ID as key for authenticated requests
     keyGenerator: (req: Request) => {
-      return req.user?.id || req.ip || 'anonymous';
+      const user = req.user as User | undefined;
+      return user?.id || req.ip || 'anonymous';
     },
     handler: (req: Request, res: Response) => {
-      const tier = req.user?.subscriptionTier || 'unauthenticated';
-      const limit = req.user
-        ? config.rateLimit[req.user.subscriptionTier as keyof typeof config.rateLimit]
+      const user = req.user as User | undefined;
+      const tier = user?.subscriptionTier || 'unauthenticated';
+      const limit = user && user.subscriptionTier
+        ? config.rateLimit[user.subscriptionTier as keyof typeof config.rateLimit]
         : 30;
 
       res.status(429).json({

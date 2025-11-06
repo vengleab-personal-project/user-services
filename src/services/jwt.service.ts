@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { config } from '../config';
 import { JWTPayload, TokenResponse } from '../types/auth.types';
 import { User } from '../models/user.model';
@@ -16,9 +16,11 @@ export class JWTService {
       subscriptionTier: user.subscriptionTier,
     };
 
-    return jwt.sign(payload, config.jwt.secret, {
+    const options: SignOptions = {
       expiresIn: config.jwt.expiresIn,
-    });
+    };
+
+    return jwt.sign(payload, config.jwt.secret, options);
   }
 
   /**
@@ -26,15 +28,18 @@ export class JWTService {
    */
   static generateRefreshToken(user: User): string {
     const payload: JWTPayload = {
+      id: user.id,
       userId: user.id,
       email: user.email,
       role: user.role,
       subscriptionTier: user.subscriptionTier,
     };
 
-    return jwt.sign(payload, config.jwt.secret, {
+    const options: SignOptions = {
       expiresIn: config.jwt.refreshExpiresIn,
-    });
+    };
+
+    return jwt.sign(payload, config.jwt.secret, options);
   }
 
   /**

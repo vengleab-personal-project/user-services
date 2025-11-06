@@ -4,7 +4,8 @@ import { SubscriptionRepository } from '../repositories/subscription.repository'
 import { authenticate, requireTier } from '../middleware/auth.middleware';
 import { asyncHandler } from '../middleware/error.middleware';
 import { validateBody, updateSubscriptionSchema } from '../utils/validation.utils';
-import { SubscriptionTier } from '../types/subscription.types';
+import { SubscriptionTier, BillingCycle } from '../types/subscription.types';
+import { User } from '../models/user.model';
 
 const router = Router();
 const subscriptionService = new SubscriptionService();
@@ -17,13 +18,19 @@ router.get(
   '/me',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
-    let subscription = await subscriptionService.getUserSubscription(req.user!.id);
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
+    let subscription = await subscriptionService.getUserSubscription(user.id);
     
     // Auto-create subscription if missing (for users created during errors)
     if (!subscription) {
       subscription = await subscriptionRepository.create({
-        userId: req.user!.id,
-        tier: 'free',
+        userId: user.id,
+        tier: SubscriptionTier.FREE,
         status: 'active',
       });
     }
@@ -38,18 +45,24 @@ router.get(
 router.get(
   '/me/limits',
   authenticate,
-  asyncHandler(async (req: Request & { user: JWTPayload }, res: Response) => {
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
     // Ensure subscription exists
-    let subscription = await subscriptionService.getUserSubscription(req.user!.id);
+    let subscription = await subscriptionService.getUserSubscription(user.id);
     if (!subscription) {
       subscription = await subscriptionRepository.create({
-        userId: req.user!.id,
-        tier: 'free',
+        userId: user.id,
+        tier: SubscriptionTier.FREE,
         status: 'active',
       });
     }
     
-    const limits = await subscriptionService.checkLimits(req.user!.id);
+    const limits = await subscriptionService.checkLimits(user.id);
     res.json(limits);
   })
 );
@@ -59,11 +72,11 @@ router.get(
  */
 router.get(
   '/pricing',
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (_req: Request, res: Response) => {
     const pricing = {
       free: {
-        monthly: subscriptionService.getSubscriptionPrice('free', 'monthly'),
-        yearly: subscriptionService.getSubscriptionPrice('free', 'yearly'),
+        monthly: subscriptionService.getSubscriptionPrice(SubscriptionTier.FREE, BillingCycle.MONTHLY),
+        yearly: subscriptionService.getSubscriptionPrice(SubscriptionTier.FREE, BillingCycle.YEARLY),
         limits: {
           forms: 10,
           fields: 100,
@@ -71,8 +84,8 @@ router.get(
         },
       },
       pro: {
-        monthly: subscriptionService.getSubscriptionPrice('pro', 'monthly'),
-        yearly: subscriptionService.getSubscriptionPrice('pro', 'yearly'),
+        monthly: subscriptionService.getSubscriptionPrice(SubscriptionTier.PRO, BillingCycle.MONTHLY),
+        yearly: subscriptionService.getSubscriptionPrice(SubscriptionTier.PRO, BillingCycle.YEARLY),
         limits: {
           forms: 100,
           fields: 999999,
@@ -80,8 +93,8 @@ router.get(
         },
       },
       enterprise: {
-        monthly: subscriptionService.getSubscriptionPrice('enterprise', 'monthly'),
-        yearly: subscriptionService.getSubscriptionPrice('enterprise', 'yearly'),
+        monthly: subscriptionService.getSubscriptionPrice(SubscriptionTier.ENTERPRISE, BillingCycle.MONTHLY),
+        yearly: subscriptionService.getSubscriptionPrice(SubscriptionTier.ENTERPRISE, BillingCycle.YEARLY),
         limits: {
           forms: 999999,
           fields: 999999,
@@ -101,9 +114,19 @@ router.post(
   '/upgrade',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
     const { tier, billingCycle } = validateBody(updateSubscriptionSchema, req.body);
 
-    const subscription = await subscriptionService.upgradeTier(req.user!.id, tier as SubscriptionTier, billingCycle);
+    const subscription = await subscriptionService.upgradeTier(
+      user.id,
+      tier as SubscriptionTier,
+      billingCycle ? (billingCycle as BillingCycle) : undefined
+    );
 
     res.json({
       message: 'Subscription upgraded successfully',
@@ -119,9 +142,15 @@ router.post(
   '/downgrade',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
     const { tier } = validateBody(updateSubscriptionSchema, req.body);
 
-    const subscription = await subscriptionService.downgradeTier(req.user!.id, tier as SubscriptionTier);
+    const subscription = await subscriptionService.downgradeTier(user.id, tier as SubscriptionTier);
 
     res.json({
       message: 'Subscription downgraded successfully',
@@ -137,7 +166,13 @@ router.post(
   '/cancel',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
-    const subscription = await subscriptionService.cancelSubscription(req.user!.id);
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
+    const subscription = await subscriptionService.cancelSubscription(user.id);
 
     res.json({
       message: 'Subscription cancelled successfully',
@@ -153,7 +188,13 @@ router.get(
   '/me/overage',
   authenticate,
   asyncHandler(async (req: Request, res: Response) => {
-    const charges = await subscriptionService.calculateOverageCharges(req.user!.id);
+    const user = req.user as User;
+    if (!user || !user.id) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+    
+    const charges = await subscriptionService.calculateOverageCharges(user.id);
     const totalAmount = charges.reduce((sum, charge) => sum + charge.totalAmount, 0);
 
     res.json({

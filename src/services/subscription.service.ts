@@ -2,7 +2,7 @@ import { SubscriptionRepository } from '../repositories/subscription.repository'
 import { UserRepository } from '../repositories/user.repository';
 import { UsageRepository } from '../repositories/usage.repository';
 import { Subscription } from '../models/subscription.model';
-import { SubscriptionTier, UsageBasedCharge, PlanType, QuotaLimits, QuotaUsage } from '../types/subscription.types';
+import { SubscriptionTier, BillingCycle, UsageBasedCharge, PlanType, QuotaLimits, QuotaUsage } from '../types/subscription.types';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { DynamoDBUtils } from '../utils/dynamodb.utils';
@@ -28,7 +28,7 @@ export class SubscriptionService {
   /**
    * Upgrade user subscription
    */
-  async upgradeTier(userId: string, newTier: SubscriptionTier, billingCycle?: 'monthly' | 'yearly'): Promise<Subscription> {
+  async upgradeTier(userId: string, newTier: SubscriptionTier, billingCycle?: BillingCycle): Promise<Subscription> {
     const subscription = await this.subscriptionRepository.findByUserId(userId);
     
     if (!subscription) {
@@ -38,7 +38,7 @@ export class SubscriptionService {
     // Update user's subscription tier
     const updatedSubscription = await this.subscriptionRepository.update(subscription.id, {
       tier: newTier,
-      billingCycle,
+      billingCycle: billingCycle as BillingCycle | undefined,
     });
 
     // Update user's tier in user table
@@ -237,18 +237,18 @@ export class SubscriptionService {
   /**
    * Get subscription price
    */
-  getSubscriptionPrice(tier: SubscriptionTier, billingCycle: 'monthly' | 'yearly' = 'monthly'): number {
-    const monthlyPrices = {
-      free: 0,
-      pro: 2900,
-      enterprise: 19900,
+  getSubscriptionPrice(tier: SubscriptionTier, billingCycle: BillingCycle = BillingCycle.MONTHLY): number {
+    const monthlyPrices: Record<SubscriptionTier, number> = {
+      [SubscriptionTier.FREE]: 0,
+      [SubscriptionTier.PRO]: 2900,
+      [SubscriptionTier.ENTERPRISE]: 19900,
     };
 
     const yearlyMultiplier = 10; // 2 months free on yearly
 
     const monthlyPrice = monthlyPrices[tier];
     
-    if (billingCycle === 'yearly') {
+    if (billingCycle === BillingCycle.YEARLY) {
       return monthlyPrice * yearlyMultiplier;
     }
 
@@ -283,7 +283,7 @@ export class SubscriptionService {
     }
 
     // For monthly plans, check against monthly limits
-    if (subscription.billingCycle === PlanType.MONTHLY) {
+    if (subscription.planType === PlanType.MONTHLY) {
       const currentUsage = await this.usageRepository.getOrCreateCurrentMonthUsage(userId);
       let limit = 0;
       let used = 0;

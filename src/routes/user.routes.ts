@@ -79,7 +79,7 @@ router.get(
   '/',
   authenticate,
   checkAbac('user', 'list'),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (_req: Request, res: Response) => {
     // Get all users from repository
     const users = await userRepository.findAll();
     res.json({ users });

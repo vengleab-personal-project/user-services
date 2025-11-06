@@ -5,6 +5,7 @@ import { JWTService } from './jwt.service';
 import { SessionService } from './session.service';
 import { TokenResponse } from '../types/auth.types';
 import { logger } from '../utils/logger';
+import { SubscriptionTier } from '../types/subscription.types';
 
 export class OAuthService {
   private userRepository: UserRepository;
@@ -54,7 +55,7 @@ export class OAuthService {
         // Create default free subscription
         await this.subscriptionRepository.create({
           userId: user.id,
-          tier: 'free',
+          tier: SubscriptionTier.FREE,
           status: 'active',
         });
 

@@ -49,16 +49,19 @@ export const config = {
       forms: parseInt(process.env.FREE_TIER_FORMS_LIMIT || '10', 10),
       fields: parseInt(process.env.FREE_TIER_FIELDS_LIMIT || '100', 10),
       apiCalls: parseInt(process.env.FREE_TIER_API_CALLS_LIMIT || '1000', 10),
+      aiQuestionsGenerated: parseInt(process.env.FREE_TIER_AI_QUESTIONS_LIMIT || '50', 10), // 50 AI generations per month
     },
     pro: {
       forms: parseInt(process.env.PRO_TIER_FORMS_LIMIT || '100', 10),
       fields: parseInt(process.env.PRO_TIER_FIELDS_LIMIT || '999999', 10),
       apiCalls: parseInt(process.env.PRO_TIER_API_CALLS_LIMIT || '50000', 10),
+      aiQuestionsGenerated: parseInt(process.env.PRO_TIER_AI_QUESTIONS_LIMIT || '5000', 10), // 5000 AI generations per month
     },
     enterprise: {
       forms: parseInt(process.env.ENTERPRISE_TIER_FORMS_LIMIT || '999999', 10),
       fields: parseInt(process.env.ENTERPRISE_TIER_FIELDS_LIMIT || '999999', 10),
       apiCalls: parseInt(process.env.ENTERPRISE_TIER_API_CALLS_LIMIT || '999999', 10),
+      aiQuestionsGenerated: parseInt(process.env.ENTERPRISE_TIER_AI_QUESTIONS_LIMIT || '999999', 10), // Unlimited
     },
   },
   

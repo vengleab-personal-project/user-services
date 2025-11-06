@@ -38,7 +38,7 @@ router.get(
 router.get(
   '/me/limits',
   authenticate,
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: Request & { user: JWTPayload }, res: Response) => {
     // Ensure subscription exists
     let subscription = await subscriptionService.getUserSubscription(req.user!.id);
     if (!subscription) {

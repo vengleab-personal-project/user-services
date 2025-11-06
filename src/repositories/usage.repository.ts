@@ -28,6 +28,7 @@ export class UsageRepository {
         formsCreated: 0,
         fieldsGenerated: 0,
         apiCallsMade: 0,
+        aiQuestionsGenerated: 0,
         charges: [],
         totalCharges: 0,
         createdAt: DynamoDBUtils.getTimestamp(),
@@ -63,7 +64,7 @@ export class UsageRepository {
    */
   async incrementUsage(
     userId: string,
-    field: 'formsCreated' | 'fieldsGenerated' | 'apiCallsMade',
+    field: 'formsCreated' | 'fieldsGenerated' | 'apiCallsMade' | 'aiQuestionsGenerated',
     amount: number = 1
   ): Promise<UsageRecord> {
     const usage = await this.getOrCreateCurrentMonthUsage(userId);

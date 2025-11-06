@@ -114,6 +114,29 @@ export class UsageService {
   }
 
   /**
+   * Track AI questions generation
+   */
+  async trackAIQuestionsGenerated(userId: string, count: number, metadata?: Record<string, any>): Promise<void> {
+    try {
+      // Increment usage counter
+      await this.usageRepository.incrementUsage(userId, 'aiQuestionsGenerated', count);
+
+      // Create usage event
+      await this.usageRepository.createEvent({
+        userId,
+        eventType: 'ai_questions_generated',
+        category: 'ai',
+        units: 'requests',
+        metadata: { ...metadata, count },
+      });
+
+      logger.debug('AI questions generation tracked', { userId, count });
+    } catch (error) {
+      logger.error('Error tracking AI questions generation', { userId, count, error });
+    }
+  }
+
+  /**
    * Get current month usage for user
    */
   async getCurrentMonthUsage(userId: string): Promise<UsageRecord> {

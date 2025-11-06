@@ -16,6 +16,7 @@ import formRoutes from './routes/form.routes';
 import subscriptionRoutes from './routes/subscription.routes';
 import usageRoutes from './routes/usage.routes';
 import policyRoutes from './routes/policy.routes';
+import { quotaRouter } from './routes/quota.routes';
 
 export const createApp = (): Application => {
   const app = express();
@@ -120,6 +121,7 @@ export const createApp = (): Application => {
   app.use('/api/subscriptions', subscriptionRoutes);
   app.use('/api/usage', usageRoutes);
   app.use('/api/policies', policyRoutes);
+  app.use('/api/quota', quotaRouter);
 
   // 404 handler
   app.use(notFoundHandler);

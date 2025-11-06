@@ -2,7 +2,7 @@ import { SubscriptionRepository } from '../repositories/subscription.repository'
 import { UserRepository } from '../repositories/user.repository';
 import { UsageRepository } from '../repositories/usage.repository';
 import { Subscription } from '../models/subscription.model';
-import { SubscriptionTier, UsageBasedCharge } from '../types/subscription.types';
+import { SubscriptionTier, UsageBasedCharge, PlanType, QuotaLimits, QuotaUsage } from '../types/subscription.types';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { DynamoDBUtils } from '../utils/dynamodb.utils';
@@ -253,6 +253,241 @@ export class SubscriptionService {
     }
 
     return monthlyPrice;
+  }
+
+  /**
+   * Check if user has available quota for a specific resource
+   */
+  async checkQuota(userId: string, resourceType: keyof QuotaUsage, amount: number = 1): Promise<{
+    allowed: boolean;
+    remaining: number;
+    isUnlimited: boolean;
+    planType: PlanType;
+  }> {
+    const subscription = await this.getUserSubscription(userId);
+    
+    if (!subscription) {
+      throw new Error('Subscription not found');
+    }
+
+    // Monthly plans with unlimited quota (enterprise tier)
+    console.log({subscription});
+    
+    if (subscription.planType === PlanType.MONTHLY && subscription.tier === 'enterprise') {
+      return {
+        allowed: true,
+        remaining: Infinity,
+        isUnlimited: true,
+        planType: subscription.planType,
+      };
+    }
+
+    // For monthly plans, check against monthly limits
+    if (subscription.billingCycle === PlanType.MONTHLY) {
+      const currentUsage = await this.usageRepository.getOrCreateCurrentMonthUsage(userId);
+      let limit = 0;
+      let used = 0;
+
+      // Map quota resource types to usage record fields
+      if (resourceType === 'aiQuestionsGenerated') {
+        limit = subscription.limits.apiCalls || 0;
+        used = currentUsage.aiQuestionsGenerated || 0;
+      } else if (resourceType === 'apiCalls') {
+        limit = subscription.limits.apiCalls || 0;
+        used = currentUsage.apiCallsMade || 0;
+      } else if (resourceType === 'forms') {
+        limit = subscription.limits.forms || 0;
+        used = currentUsage.formsCreated || 0;
+      } else if (resourceType === 'fields') {
+        limit = subscription.limits.fields || 0;
+        used = currentUsage.fieldsGenerated || 0;
+      }
+
+      const remaining = Math.max(0, limit - used);
+
+      return {
+        allowed: remaining >= amount,
+        remaining,
+        isUnlimited: false,
+        planType: subscription.planType,
+      };
+    }
+
+    // For one-off plans, check against quota limits
+    if (subscription.planType === PlanType.ONE_OFF) {
+      if (!subscription.quotaLimits || !subscription.quotaUsage) {
+        throw new Error('Quota limits not configured for one-off plan');
+      }
+
+      const limit = (subscription.quotaLimits[resourceType] as number) || 0;
+      const used = (subscription.quotaUsage[resourceType] as number) || 0;
+      const remaining = Math.max(0, limit - used);
+
+      return {
+        allowed: remaining >= amount,
+        remaining,
+        isUnlimited: false,
+        planType: subscription.planType,
+      };
+    }
+
+    return {
+      allowed: false,
+      remaining: 0,
+      isUnlimited: false,
+      planType: subscription.planType,
+    };
+  }
+
+  /**
+   * Deduct quota for a resource (for one-off plans)
+   */
+  async deductQuota(userId: string, resourceType: keyof QuotaUsage, amount: number = 1): Promise<void> {
+    const subscription = await this.getUserSubscription(userId);
+    
+    if (!subscription) {
+      throw new Error('Subscription not found');
+    }
+
+    // Only deduct for one-off plans
+    if (subscription.planType === PlanType.ONE_OFF) {
+      if (!subscription.quotaUsage) {
+        subscription.quotaUsage = {
+          aiQuestionsGenerated: 0,
+          apiCalls: 0,
+          forms: 0,
+          fields: 0,
+          lastUpdated: DynamoDBUtils.getTimestamp(),
+        };
+      }
+
+      const currentUsage = (subscription.quotaUsage[resourceType] as number) || 0;
+      const newUsage = currentUsage + amount;
+      
+      (subscription.quotaUsage[resourceType] as number) = newUsage;
+      subscription.quotaUsage.lastUpdated = DynamoDBUtils.getTimestamp();
+
+      // Check if quota is exhausted
+      const quotaLimits = subscription.quotaLimits!;
+      const allExhausted = Object.keys(quotaLimits).every((key) => {
+        const k = key as keyof QuotaLimits;
+        const usageValue = subscription.quotaUsage![k as keyof QuotaUsage];
+        const limitValue = quotaLimits[k];
+        // Skip non-numeric fields
+        if (typeof usageValue !== 'number' || typeof limitValue !== 'number') {
+          return true;
+        }
+        return usageValue >= limitValue;
+      });
+
+      if (allExhausted) {
+        subscription.status = 'quota_exhausted';
+      }
+
+      await this.subscriptionRepository.update(subscription.id, {
+        quotaUsage: subscription.quotaUsage,
+        status: subscription.status,
+      });
+
+      logger.info('Quota deducted', { userId, resourceType, amount, newUsage });
+    }
+    // For monthly plans, usage is tracked separately in UsageRecord
+  }
+
+  /**
+   * Purchase one-off quota package
+   */
+  async purchaseQuotaPackage(userId: string, quotaLimits: QuotaLimits): Promise<Subscription> {
+    const subscription = await this.getUserSubscription(userId);
+    
+    if (!subscription) {
+      throw new Error('Subscription not found');
+    }
+
+    // Initialize or add to existing quota
+    const currentQuotaLimits = subscription.quotaLimits || {
+      aiQuestionsGenerated: 0,
+      apiCalls: 0,
+      forms: 0,
+      fields: 0,
+    };
+
+    const newQuotaLimits: QuotaLimits = {
+      aiQuestionsGenerated: currentQuotaLimits.aiQuestionsGenerated + quotaLimits.aiQuestionsGenerated,
+      apiCalls: currentQuotaLimits.apiCalls + quotaLimits.apiCalls,
+      forms: currentQuotaLimits.forms + quotaLimits.forms,
+      fields: currentQuotaLimits.fields + quotaLimits.fields,
+      dataSize: (currentQuotaLimits.dataSize || 0) + (quotaLimits.dataSize || 0),
+    };
+
+    const updatedSubscription = await this.subscriptionRepository.update(subscription.id, {
+      planType: PlanType.ONE_OFF,
+      quotaLimits: newQuotaLimits,
+      status: 'active',
+    });
+
+    logger.info('Quota package purchased', { userId, quotaLimits });
+
+    return updatedSubscription;
+  }
+
+  /**
+   * Reset quota usage (admin function)
+   */
+  async resetQuotaUsage(userId: string): Promise<Subscription> {
+    const subscription = await this.getUserSubscription(userId);
+    
+    if (!subscription) {
+      throw new Error('Subscription not found');
+    }
+
+    const resetQuotaUsage: QuotaUsage = {
+      aiQuestionsGenerated: 0,
+      apiCalls: 0,
+      forms: 0,
+      fields: 0,
+      lastUpdated: DynamoDBUtils.getTimestamp(),
+    };
+
+    const updatedSubscription = await this.subscriptionRepository.update(subscription.id, {
+      quotaUsage: resetQuotaUsage,
+      status: 'active',
+    });
+
+    logger.info('Quota usage reset', { userId });
+
+    return updatedSubscription;
+  }
+
+  /**
+   * Manually adjust quota limits (admin function)
+   */
+  async adjustQuotaLimits(userId: string, adjustments: Partial<QuotaLimits>): Promise<Subscription> {
+    const subscription = await this.getUserSubscription(userId);
+    
+    if (!subscription) {
+      throw new Error('Subscription not found');
+    }
+
+    const currentQuotaLimits = subscription.quotaLimits || {
+      aiQuestionsGenerated: 0,
+      apiCalls: 0,
+      forms: 0,
+      fields: 0,
+    };
+
+    const newQuotaLimits: QuotaLimits = {
+      ...currentQuotaLimits,
+      ...adjustments,
+    };
+
+    const updatedSubscription = await this.subscriptionRepository.update(subscription.id, {
+      quotaLimits: newQuotaLimits,
+    });
+
+    logger.info('Quota limits adjusted', { userId, adjustments });
+
+    return updatedSubscription;
   }
 }
 

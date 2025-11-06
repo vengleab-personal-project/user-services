@@ -9,10 +9,25 @@ export enum BillingCycle {
   YEARLY = 'yearly',
 }
 
+export enum PlanType {
+  MONTHLY = 'monthly',
+  ONE_OFF = 'one_off',
+}
+
 export interface SubscriptionLimits {
   forms: number;
   fields: number;
   apiCalls: number;
+  aiQuestionsGenerated?: number; // Optional for backward compatibility
+}
+
+// Quota-based limits for purchased plans
+export interface QuotaLimits {
+  aiQuestionsGenerated: number; // Quota for AI question generation
+  apiCalls: number; // General API calls quota
+  forms: number; // Forms creation quota
+  fields: number; // Fields generation quota
+  dataSize?: number; // Optional data size limit in bytes
 }
 
 export interface UsageMetrics {
@@ -20,6 +35,16 @@ export interface UsageMetrics {
   fieldsGenerated: number;
   apiCallsMade: number;
   lastResetDate: string;
+}
+
+// Quota usage tracking
+export interface QuotaUsage {
+  aiQuestionsGenerated: number;
+  apiCalls: number;
+  forms: number;
+  fields: number;
+  dataSize?: number;
+  lastUpdated: string;
 }
 
 export interface BillingInfo {

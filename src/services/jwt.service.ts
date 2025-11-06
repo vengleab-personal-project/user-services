@@ -9,6 +9,7 @@ export class JWTService {
    */
   static generateAccessToken(user: User): string {
     const payload: JWTPayload = {
+      id: user.id,
       userId: user.id,
       email: user.email,
       role: user.role,

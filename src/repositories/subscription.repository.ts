@@ -2,7 +2,7 @@ import { Subscription } from '../models/subscription.model';
 import { prisma } from '../config/prisma.config';
 import { SubscriptionTier, SubscriptionLimits, PlanType } from '../types/subscription.types';
 import { config } from '../config';
-import { Prisma, SubscriptionTier as PrismaSubscriptionTier } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 export class SubscriptionRepository {
   /**

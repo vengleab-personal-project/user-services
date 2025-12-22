@@ -2,6 +2,7 @@ import { ABACPolicy, ABACEvaluationContext, PolicyEvaluationResult, PolicyEffect
 import { PolicyRepository } from '../repositories/policy.repository';
 import { defaultPolicies } from '../config/abac.config';
 import { logger } from '../utils/logger';
+import { PolicyEffect as PrismaPolicyEffect } from '@prisma/client';
 
 export class ABACService {
   private policyRepository: PolicyRepository;
@@ -26,9 +27,27 @@ export class ABACService {
 
     // Load custom policies from database
     const customPolicies = await this.policyRepository.findAll();
-    
-    // Combine default and custom policies
-    this.cachedPolicies = [...defaultPolicies, ...customPolicies.filter(p => p.enabled)];
+
+    // Combine default and custom policies, mapping Prisma types to ABAC types
+    this.cachedPolicies = [
+      ...defaultPolicies,
+      ...customPolicies
+        .filter(p => p.enabled)
+        .map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || undefined,
+          resource: p.resource,
+          action: p.action,
+          effect: p.effect === PrismaPolicyEffect.allow ? PolicyEffect.ALLOW : PolicyEffect.DENY,
+          conditions: p.conditions as any || undefined,
+          priority: p.priority,
+          userId: p.userId || undefined,
+          enabled: p.enabled,
+          createdAt: p.createdAt.toISOString(),
+          updatedAt: p.updatedAt.toISOString(),
+        } as ABACPolicy))
+    ];
     this.lastCacheUpdate = now;
     
     return this.cachedPolicies;

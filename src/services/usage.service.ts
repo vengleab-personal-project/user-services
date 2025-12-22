@@ -19,9 +19,6 @@ export class UsageService {
     try {
       // Increment usage counter
       await this.usageRepository.incrementUsage(userId, 'apiCallsMade', 1);
-
-      // Update user stats
-      await this.userRepository.incrementStats(userId, 'apiCallsThisMonth', 1);
       await this.userRepository.incrementStats(userId, 'totalApiCalls', 1);
 
       // Create usage event
@@ -157,22 +154,6 @@ export class UsageService {
     return await this.usageRepository.getEvents(userId, limit);
   }
 
-  /**
-   * Reset monthly usage counters
-   * This would typically be run by a scheduled job at the start of each month
-   */
-  async resetMonthlyUsage(userId: string): Promise<void> {
-    try {
-      // Reset user stats for the new month
-      await this.userRepository.updateStats(userId, {
-        apiCallsThisMonth: 0,
-      });
-
-      logger.info('Monthly usage reset', { userId });
-    } catch (error) {
-      logger.error('Error resetting monthly usage', { userId, error });
-    }
-  }
 }
 
 

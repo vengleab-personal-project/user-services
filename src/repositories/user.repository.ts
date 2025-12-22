@@ -22,9 +22,7 @@ export class UserRepository {
           create: {
             formCount: 0,
             fieldCount: 0,
-            apiCallsThisMonth: 0,
             totalApiCalls: 0,
-            storageUsed: 0,
           }
         }
       },
@@ -131,9 +129,7 @@ export class UserRepository {
       data: {
         ...(updates.formCount !== undefined && { formCount: updates.formCount }),
         ...(updates.fieldCount !== undefined && { fieldCount: updates.fieldCount }),
-        ...(updates.apiCallsThisMonth !== undefined && { apiCallsThisMonth: updates.apiCallsThisMonth }),
         ...(updates.totalApiCalls !== undefined && { totalApiCalls: updates.totalApiCalls }),
-        ...(updates.storageUsed !== undefined && { storageUsed: BigInt(updates.storageUsed) }),
       },
     });
   }
@@ -141,7 +137,7 @@ export class UserRepository {
   /**
    * Increment user statistics
    */
-  async incrementStats(userId: string, field: keyof Pick<UserStats, 'formCount' | 'fieldCount' | 'apiCallsThisMonth' | 'totalApiCalls'>, amount: number = 1): Promise<void> {
+  async incrementStats(userId: string, field: keyof Pick<UserStats, 'formCount' | 'fieldCount' | 'totalApiCalls'>, amount: number = 1): Promise<void> {
     await prisma.userStats.update({
       where: { userId },
       data: {

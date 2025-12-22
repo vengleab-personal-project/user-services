@@ -170,8 +170,8 @@ quotaRouter.get('/status', async (req, res) => {
       return;
     }
     
-    const subscription = await subscriptionService.getUserSubscription(user.id);
-    
+    let subscription = await subscriptionService.getUserSubscription(user.id);
+
     if (!subscription) {
       res.status(404).json({ error: 'Subscription not found' });
       return;

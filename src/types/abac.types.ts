@@ -57,7 +57,7 @@ export interface ABACEvaluationContext {
     stats?: {
       formCount: number;
       fieldCount: number;
-      apiCallsThisMonth: number;
+      apiCallsThisMonth: number; // Fetched from UsageRecord, not UserStats
     };
     [key: string]: any;
   };

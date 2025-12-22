@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { SubscriptionService } from '../services/subscription.service';
-import { SubscriptionRepository } from '../repositories/subscription.repository';
 import { authenticate, requireTier } from '../middleware/auth.middleware';
 import { asyncHandler } from '../middleware/error.middleware';
 import { validateBody, updateSubscriptionSchema } from '../utils/validation.utils';
@@ -9,7 +8,6 @@ import { User } from '../models/user.model';
 
 const router: Router = Router();
 const subscriptionService = new SubscriptionService();
-const subscriptionRepository = new SubscriptionRepository();
 
 /**
  * Get current user's subscription (with auto-creation if missing)
@@ -24,15 +22,11 @@ router.get(
       return;
     }
     
-    let subscription = await subscriptionService.getUserSubscription(user.id);
+    const subscription = await subscriptionService.getUserSubscription(user.id);
     
-    // Auto-create subscription if missing (for users created during errors)
     if (!subscription) {
-      subscription = await subscriptionRepository.create({
-        userId: user.id,
-        tier: SubscriptionTier.FREE,
-        status: 'active',
-      });
+      res.status(404).json({ error: 'Subscription not found. Please contact support.' });
+      return;
     }
     
     res.json({ subscription });
@@ -50,16 +44,6 @@ router.get(
     if (!user || !user.id) {
       res.status(401).json({ error: 'User not authenticated' });
       return;
-    }
-    
-    // Ensure subscription exists
-    let subscription = await subscriptionService.getUserSubscription(user.id);
-    if (!subscription) {
-      subscription = await subscriptionRepository.create({
-        userId: user.id,
-        tier: SubscriptionTier.FREE,
-        status: 'active',
-      });
     }
     
     const limits = await subscriptionService.checkLimits(user.id);

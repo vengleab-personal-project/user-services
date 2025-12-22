@@ -2,7 +2,7 @@ import { SubscriptionRepository } from '../repositories/subscription.repository'
 import { UserRepository } from '../repositories/user.repository';
 import { UsageRepository } from '../repositories/usage.repository';
 import { Subscription } from '../models/subscription.model';
-import { SubscriptionTier, BillingCycle, UsageBasedCharge, PlanType, QuotaLimits, QuotaUsage } from '../types/subscription.types';
+import { SubscriptionTier, BillingCycle, UsageBasedCharge, PlanType, QuotaLimits, QuotaUsage, SubscriptionLimits } from '../types/subscription.types';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { generateId, getTimestamp } from '../utils/id.utils';
@@ -29,10 +29,10 @@ export class SubscriptionService {
    * Upgrade user subscription
    */
   async upgradeTier(userId: string, newTier: SubscriptionTier, billingCycle?: BillingCycle): Promise<Subscription> {
-    const subscription = await this.subscriptionRepository.findByUserId(userId);
+    let subscription = await this.subscriptionRepository.findByUserId(userId);
     
     if (!subscription) {
-      throw new Error('Subscription not found');
+      subscription = await this.subscriptionRepository.createDefaultSubscription(userId);
     }
 
     // Update user's subscription tier
@@ -100,43 +100,31 @@ export class SubscriptionService {
     formsAllowed: boolean;
     fieldsAllowed: boolean;
     apiCallsAllowed: boolean;
-    limits: any;
+    limits: SubscriptionLimits;
     usage: any;
   }> {
     const subscription = await this.getUserSubscription(userId);
-    let userStats = await this.userRepository.getStats(userId);
+    const userStats = await this.userRepository.getStats(userId);
     const currentUsage = await this.usageRepository.getOrCreateCurrentMonthUsage(userId);
 
     if (!subscription) {
       throw new Error('Subscription not found');
     }
 
-    // Auto-create user stats if missing (for users created during errors)
-    if (!userStats) {
-      userStats = {
-        userId,
-        formCount: 0,
-        fieldCount: 0,
-        apiCallsThisMonth: 0,
-        totalApiCalls: 0,
-        storageUsed: 0,
-        lastUpdated: new Date().toISOString(),
-      };
-      // Save to database
-      await this.userRepository.updateStats(userId, userStats);
-    }
-
-    const limits = subscription.limits;
+    const limits = subscription.limits as unknown as SubscriptionLimits;
+    const formCount = userStats?.formCount || 0;
+    const fieldCount = userStats?.fieldCount || 0;
+    const apiCallsMade = currentUsage.apiCallsMade || 0;
 
     return {
-      formsAllowed: userStats.formCount < limits.forms,
-      fieldsAllowed: userStats.fieldCount < limits.fields,
-      apiCallsAllowed: currentUsage.apiCallsMade < limits.apiCalls,
+      formsAllowed: formCount < (limits.forms || 0),
+      fieldsAllowed: fieldCount < (limits.fields || 0),
+      apiCallsAllowed: apiCallsMade < (limits.apiCalls || 0),
       limits,
       usage: {
-        forms: userStats.formCount,
-        fields: userStats.fieldCount,
-        apiCalls: currentUsage.apiCallsMade,
+        forms: formCount,
+        fields: fieldCount,
+        apiCalls: apiCallsMade,
       },
     };
   }
@@ -154,11 +142,11 @@ export class SubscriptionService {
     }
 
     const charges: UsageBasedCharge[] = [];
-    const limits = subscription.limits;
+    const limits = subscription.limits as unknown as SubscriptionLimits;
 
     // Calculate API calls overage
-    if (currentUsage.apiCallsMade > limits.apiCalls) {
-      const overage = currentUsage.apiCallsMade - limits.apiCalls;
+    if (currentUsage.apiCallsMade > (limits.apiCalls || 0)) {
+      const overage = currentUsage.apiCallsMade - (limits.apiCalls || 0);
       const billableUnits = Math.ceil(overage / 100); // Per 100 API calls
       const charge: UsageBasedCharge = {
         id: generateId('charge'),
@@ -173,8 +161,8 @@ export class SubscriptionService {
     }
 
     // Calculate forms overage
-    if (userStats.formCount > limits.forms) {
-      const overage = userStats.formCount - limits.forms;
+    if (userStats.formCount > (limits.forms || 0)) {
+      const overage = userStats.formCount - (limits.forms || 0);
       const billableUnits = Math.ceil(overage / 10); // Per 10 forms
       const charge: UsageBasedCharge = {
         id: generateId('charge'),
@@ -273,33 +261,34 @@ export class SubscriptionService {
     // Monthly plans with unlimited quota (enterprise tier)
     console.log({subscription});
     
-    if (subscription.planType === PlanType.MONTHLY && subscription.tier === 'enterprise') {
+    if (subscription.planType.toString() === PlanType.MONTHLY && subscription.tier === 'enterprise') {
       return {
         allowed: true,
         remaining: Infinity,
         isUnlimited: true,
-        planType: subscription.planType,
+        planType: PlanType.MONTHLY,
       };
     }
 
     // For monthly plans, check against monthly limits
-    if (subscription.planType === PlanType.MONTHLY) {
+    if (subscription.planType.toString() === PlanType.MONTHLY) {
       const currentUsage = await this.usageRepository.getOrCreateCurrentMonthUsage(userId);
+      const limits = subscription.limits as unknown as SubscriptionLimits;
       let limit = 0;
       let used = 0;
 
       // Map quota resource types to usage record fields
       if (resourceType === 'aiQuestionsGenerated') {
-        limit = subscription.limits.apiCalls || 0;
+        limit = limits.apiCalls || 0;
         used = currentUsage.aiQuestionsGenerated || 0;
       } else if (resourceType === 'apiCalls') {
-        limit = subscription.limits.apiCalls || 0;
+        limit = limits.apiCalls || 0;
         used = currentUsage.apiCallsMade || 0;
       } else if (resourceType === 'forms') {
-        limit = subscription.limits.forms || 0;
+        limit = limits.forms || 0;
         used = currentUsage.formsCreated || 0;
       } else if (resourceType === 'fields') {
-        limit = subscription.limits.fields || 0;
+        limit = limits.fields || 0;
         used = currentUsage.fieldsGenerated || 0;
       }
 
@@ -309,29 +298,32 @@ export class SubscriptionService {
         allowed: remaining >= amount,
         remaining,
         isUnlimited: false,
-        planType: subscription.planType,
+        planType: PlanType.MONTHLY,
       };
     }
 
     // For one-off plans, check against quota limits
-    if (subscription.planType === PlanType.ONE_OFF) {
+    if (subscription.planType.toString() === PlanType.ONE_OFF) {
       if (!subscription.quotaLimits || !subscription.quotaUsage) {
         throw new Error('Quota limits not configured for one-off plan');
       }
 
+      const quotaLimits = subscription.quotaLimits as unknown as QuotaLimits;
+      const quotaUsage = subscription.quotaUsage as unknown as QuotaUsage;
+
       // Exclude 'lastUpdated' from QuotaUsage when accessing QuotaLimits
       const quotaLimitKey = resourceType === 'lastUpdated' ? undefined : resourceType;
-      const limit = quotaLimitKey && quotaLimitKey in subscription.quotaLimits 
-        ? (subscription.quotaLimits[quotaLimitKey as keyof QuotaLimits] as number) || 0
+      const limit = quotaLimitKey && quotaLimitKey in quotaLimits 
+        ? (quotaLimits[quotaLimitKey as keyof QuotaLimits] as number) || 0
         : 0;
-      const used = (subscription.quotaUsage[resourceType] as number) || 0;
+      const used = (quotaUsage[resourceType] as number) || 0;
       const remaining = Math.max(0, limit - used);
 
       return {
         allowed: remaining >= amount,
         remaining,
         isUnlimited: false,
-        planType: subscription.planType,
+        planType: PlanType.ONE_OFF,
       };
     }
 
@@ -339,7 +331,7 @@ export class SubscriptionService {
       allowed: false,
       remaining: 0,
       isUnlimited: false,
-      planType: subscription.planType,
+      planType: subscription.planType.toString() as PlanType,
     };
   }
 
@@ -354,7 +346,7 @@ export class SubscriptionService {
     }
 
     // Only deduct for one-off plans
-    if (subscription.planType === PlanType.ONE_OFF) {
+    if (subscription.planType.toString() === PlanType.ONE_OFF) {
       if (!subscription.quotaUsage) {
         subscription.quotaUsage = {
           aiQuestionsGenerated: 0,
@@ -362,20 +354,21 @@ export class SubscriptionService {
           forms: 0,
           fields: 0,
           lastUpdated: getTimestamp(),
-        };
+        } as any;
       }
 
-      const currentUsage = (subscription.quotaUsage[resourceType] as number) || 0;
+      const quotaUsage = subscription.quotaUsage as unknown as QuotaUsage;
+      const currentUsage = (quotaUsage[resourceType] as number) || 0;
       const newUsage = currentUsage + amount;
       
-      (subscription.quotaUsage[resourceType] as number) = newUsage;
-      subscription.quotaUsage.lastUpdated = getTimestamp();
+      (quotaUsage[resourceType] as number) = newUsage;
+      quotaUsage.lastUpdated = getTimestamp();
 
       // Check if quota is exhausted
-      const quotaLimits = subscription.quotaLimits!;
+      const quotaLimits = subscription.quotaLimits as unknown as QuotaLimits;
       const allExhausted = Object.keys(quotaLimits).every((key) => {
         const k = key as keyof QuotaLimits;
-        const usageValue = subscription.quotaUsage![k as keyof QuotaUsage];
+        const usageValue = quotaUsage[k as keyof QuotaUsage];
         const limitValue = quotaLimits[k];
         // Skip non-numeric fields
         if (typeof usageValue !== 'number' || typeof limitValue !== 'number') {
@@ -389,7 +382,7 @@ export class SubscriptionService {
       }
 
       await this.subscriptionRepository.update(subscription.id, {
-        quotaUsage: subscription.quotaUsage,
+        quotaUsage: quotaUsage as any,
         status: subscription.status,
       });
 
@@ -409,7 +402,7 @@ export class SubscriptionService {
     }
 
     // Initialize or add to existing quota
-    const currentQuotaLimits = subscription.quotaLimits || {
+    const currentQuotaLimits = (subscription.quotaLimits as unknown as QuotaLimits) || {
       aiQuestionsGenerated: 0,
       apiCalls: 0,
       forms: 0,
@@ -417,16 +410,16 @@ export class SubscriptionService {
     };
 
     const newQuotaLimits: QuotaLimits = {
-      aiQuestionsGenerated: currentQuotaLimits.aiQuestionsGenerated + quotaLimits.aiQuestionsGenerated,
-      apiCalls: currentQuotaLimits.apiCalls + quotaLimits.apiCalls,
-      forms: currentQuotaLimits.forms + quotaLimits.forms,
-      fields: currentQuotaLimits.fields + quotaLimits.fields,
+      aiQuestionsGenerated: (currentQuotaLimits.aiQuestionsGenerated || 0) + quotaLimits.aiQuestionsGenerated,
+      apiCalls: (currentQuotaLimits.apiCalls || 0) + quotaLimits.apiCalls,
+      forms: (currentQuotaLimits.forms || 0) + quotaLimits.forms,
+      fields: (currentQuotaLimits.fields || 0) + quotaLimits.fields,
       dataSize: (currentQuotaLimits.dataSize || 0) + (quotaLimits.dataSize || 0),
     };
 
     const updatedSubscription = await this.subscriptionRepository.update(subscription.id, {
-      planType: PlanType.ONE_OFF,
-      quotaLimits: newQuotaLimits,
+      planType: PlanType.ONE_OFF as any,
+      quotaLimits: newQuotaLimits as any,
       status: 'active',
     });
 
@@ -454,7 +447,7 @@ export class SubscriptionService {
     };
 
     const updatedSubscription = await this.subscriptionRepository.update(subscription.id, {
-      quotaUsage: resetQuotaUsage,
+      quotaUsage: resetQuotaUsage as any,
       status: 'active',
     });
 
@@ -473,7 +466,7 @@ export class SubscriptionService {
       throw new Error('Subscription not found');
     }
 
-    const currentQuotaLimits = subscription.quotaLimits || {
+    const currentQuotaLimits = (subscription.quotaLimits as unknown as QuotaLimits) || {
       aiQuestionsGenerated: 0,
       apiCalls: 0,
       forms: 0,
@@ -486,7 +479,7 @@ export class SubscriptionService {
     };
 
     const updatedSubscription = await this.subscriptionRepository.update(subscription.id, {
-      quotaLimits: newQuotaLimits,
+      quotaLimits: newQuotaLimits as any,
     });
 
     logger.info('Quota limits adjusted', { userId, adjustments });

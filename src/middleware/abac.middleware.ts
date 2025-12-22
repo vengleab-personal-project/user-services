@@ -1,14 +1,17 @@
+/// <reference path="../types/express.d.ts" />
 import { Request, Response, NextFunction } from 'express';
 import { ABACService } from '../services/abac.service';
 import { ABACEvaluationContext } from '../types/abac.types';
 import { UserRepository } from '../repositories/user.repository';
 import { SubscriptionRepository } from '../repositories/subscription.repository';
+import { UsageRepository } from '../repositories/usage.repository';
 import { User } from '../models/user.model';
 import { logger } from '../utils/logger';
 
 const abacService = new ABACService();
 const userRepository = new UserRepository();
 const subscriptionRepository = new SubscriptionRepository();
+const usageRepository = new UsageRepository();
 
 /**
  * ABAC authorization middleware factory
@@ -30,9 +33,10 @@ export const checkAbac = (
 
       const user = req.user as User;
 
-      // Get user stats
+      // Get user stats and usage
       const userStats = await userRepository.getStats(user.id);
       const subscription = await subscriptionRepository.findByUserId(user.id);
+      const currentMonthUsage = await usageRepository.getOrCreateCurrentMonthUsage(user.id);
 
       // Extract resource information
       let resource: any = {
@@ -54,14 +58,14 @@ export const checkAbac = (
           stats: {
             formCount: userStats?.formCount || 0,
             fieldCount: userStats?.fieldCount || 0,
-            apiCallsThisMonth: userStats?.apiCallsThisMonth || 0,
+            apiCallsThisMonth: currentMonthUsage?.apiCallsMade || 0,
           },
         },
         resource,
         action,
-        subscription: subscription
+        subscription: subscription && subscription.limits && typeof subscription.limits === 'object' && !Array.isArray(subscription.limits)
           ? {
-              limits: subscription.limits,
+              limits: subscription.limits as { forms: number; fields: number; apiCalls: number },
             }
           : undefined,
         request: {

@@ -109,7 +109,8 @@ export class FormService {
       },
     };
 
-    const filteredFields = await this.abacService.filterFields(context, form.fields);
+    const fields = Array.isArray(form.fields) ? form.fields : [];
+    const filteredFields = await this.abacService.filterFields(context, fields);
 
     return {
       ...form,

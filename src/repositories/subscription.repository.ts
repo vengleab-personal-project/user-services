@@ -2,7 +2,7 @@ import { Subscription } from '../models/subscription.model';
 import { prisma } from '../config/prisma.config';
 import { SubscriptionTier, SubscriptionLimits, PlanType } from '../types/subscription.types';
 import { config } from '../config';
-import { Prisma } from '@prisma/client';
+import { Prisma, SubscriptionTier as PrismaSubscriptionTier } from '@prisma/client';
 
 export class SubscriptionRepository {
   /**
@@ -16,7 +16,7 @@ export class SubscriptionRepository {
    * Create a new subscription
    */
   async create(subscriptionData: Partial<Omit<Subscription, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Subscription> {
-    const tier = subscriptionData.tier || SubscriptionTier.FREE;
+    const tier = (subscriptionData.tier as SubscriptionTier) || SubscriptionTier.FREE;
     return await prisma.subscription.create({
       data: {
         userId: subscriptionData.userId || '',
@@ -24,7 +24,7 @@ export class SubscriptionRepository {
         planType: subscriptionData.planType || PlanType.MONTHLY,
         billingCycle: subscriptionData.billingCycle as any,
         status: subscriptionData.status || 'active',
-        limits: this.getLimitsByTier(tier) as Prisma.InputJsonValue,
+        limits: this.getLimitsByTier(tier) as unknown as Prisma.InputJsonValue,
         quotaLimits: subscriptionData.quotaLimits as Prisma.InputJsonValue,
         quotaUsage: subscriptionData.quotaUsage as Prisma.InputJsonValue,
         billingInfo: subscriptionData.billingInfo as Prisma.InputJsonValue,
@@ -55,6 +55,15 @@ export class SubscriptionRepository {
     });
   }
 
+  async createDefaultSubscription(userId: string): Promise<Subscription> {
+    return await this.create({
+      userId,
+      tier: SubscriptionTier.FREE,
+      planType: PlanType.MONTHLY,
+      status: 'active',
+    });
+  }
+
   /**
    * Update subscription
    */
@@ -62,7 +71,7 @@ export class SubscriptionRepository {
     // If tier is being updated, update limits as well
     let limitsToUpdate = updates.limits;
     if (updates.tier) {
-      limitsToUpdate = this.getLimitsByTier(updates.tier);
+      limitsToUpdate = this.getLimitsByTier(updates.tier as SubscriptionTier) as unknown as Prisma.JsonValue;
     }
 
     return await prisma.subscription.update({

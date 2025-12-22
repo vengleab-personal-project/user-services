@@ -120,14 +120,12 @@ model User {
 }
 
 model UserStats {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  formCount         Int      @default(0)
-  fieldCount        Int      @default(0)
-  apiCallsThisMonth Int      @default(0)
-  totalApiCalls     Int      @default(0)
-  storageUsed       BigInt   @default(0) // in bytes
-  lastUpdated       DateTime @updatedAt
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  formCount    Int      @default(0)
+  fieldCount   Int      @default(0)
+  totalApiCalls Int     @default(0)
+  lastUpdated  DateTime @updatedAt
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

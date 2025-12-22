@@ -1,3 +1,9 @@
+import { Form as PrismaForm } from '@prisma/client';
+
+// Re-export Prisma type
+export type Form = PrismaForm;
+
+// Keep the enums and types for field definitions (used in JSON fields)
 export enum FieldType {
   TEXT = 'text',
   NUMBER = 'number',
@@ -32,7 +38,7 @@ export interface Field {
   prerequisites?: ConditionGroup;
   pageId: string;
   required?: boolean;
-  isPremium?: boolean; // For ABAC field-level access
+  isPremium?: boolean;
   metadata?: Record<string, any>;
 }
 
@@ -40,19 +46,3 @@ export interface Page {
   id: string;
   title: string;
 }
-
-export interface Form {
-  id: string;
-  userId: string; // Owner of the form
-  title: string;
-  description?: string;
-  pages: Page[];
-  fields: Field[];
-  visibility: 'private' | 'public' | 'unlisted';
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-  metadata?: Record<string, any>;
-}
-
-

@@ -6,17 +6,14 @@ export const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '3001', 10),
   
+  database: {
+    url: process.env.DATABASE_URL || 'postgresql://user:password@localhost:5432/gemini_form_builder',
+  },
+  
   jwt: {
     secret: process.env.JWT_SECRET || 'default-secret-change-in-production',
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
-  },
-  
-  aws: {
-    region: process.env.AWS_REGION || 'us-east-1',
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-    dynamoDBTablePrefix: process.env.DYNAMODB_TABLE_PREFIX || 'gemini-form-builder',
   },
   
   oauth: {

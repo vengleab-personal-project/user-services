@@ -1,47 +1,28 @@
-import {
-  DynamoDBDocumentClient,
-  PutCommand,
-  GetCommand,
-  QueryCommand,
-  UpdateCommand,
-  DeleteCommand,
-  ScanCommand,
-} from '@aws-sdk/lib-dynamodb';
-import { v4 as uuidv4 } from 'uuid';
-import { dynamoDBClient, TableNames } from '../config/dynamodb.config';
+import { prisma } from '../config/prisma.config';
 import { Session, CreateSessionInput } from '../models/session.model';
 import { logger } from '../utils/logger';
-
-const docClient = DynamoDBDocumentClient.from(dynamoDBClient);
-const TABLE_NAME = TableNames.Sessions;
 
 export class SessionRepository {
   /**
    * Create a new session
    */
   async create(input: CreateSessionInput): Promise<Session> {
-    const now = new Date().toISOString();
-    const session: Session = {
-      id: uuidv4(),
-      ...input,
-      isActive: true,
-      lastActivityAt: now,
-      createdAt: now,
-      updatedAt: now,
-    };
-
     try {
-      await docClient.send(
-        new PutCommand({
-          TableName: TABLE_NAME,
-          Item: {
-            PK: `USER#${session.userId}`,
-            SK: `SESSION#${session.id}`,
-            Type: 'Session',
-            ...session,
-          },
-        })
-      );
+      const session = await prisma.session.create({
+        data: {
+          userId: input.userId,
+          tokenHash: input.tokenHash,
+          refreshTokenHash: input.refreshTokenHash,
+          ipAddress: input.ipAddress,
+          userAgent: input.userAgent,
+          device: input.device,
+          browser: input.browser,
+          os: input.os,
+          location: input.location,
+          expiresAt: new Date(input.expiresAt),
+          isActive: true,
+        },
+      });
 
       logger.info('Session created', { sessionId: session.id, userId: session.userId });
       return session;
@@ -56,22 +37,12 @@ export class SessionRepository {
    */
   async findById(sessionId: string, userId: string): Promise<Session | null> {
     try {
-      const result = await docClient.send(
-        new GetCommand({
-          TableName: TABLE_NAME,
-          Key: {
-            PK: `USER#${userId}`,
-            SK: `SESSION#${sessionId}`,
-          },
-        })
-      );
-
-      if (!result.Item) {
-        return null;
-      }
-
-      const { PK, SK, Type, ...session } = result.Item;
-      return session as Session;
+      return await prisma.session.findFirst({
+        where: {
+          id: sessionId,
+          userId: userId,
+        },
+      });
     } catch (error) {
       logger.error('Error finding session by ID', { error, sessionId, userId });
       throw error;
@@ -83,26 +54,17 @@ export class SessionRepository {
    */
   async findByTokenHash(tokenHash: string): Promise<Session | null> {
     try {
-      // Use TokenHashIndex GSI for efficient lookup
-      const result = await docClient.send(
-        new QueryCommand({
-          TableName: TABLE_NAME,
-          IndexName: 'TokenHashIndex',
-          KeyConditionExpression: 'tokenHash = :tokenHash',
-          FilterExpression: 'isActive = :active',
-          ExpressionAttributeValues: {
-            ':tokenHash': tokenHash,
-            ':active': true,
-          },
-        })
-      );
+      const session = await prisma.session.findUnique({
+        where: {
+          tokenHash: tokenHash,
+        },
+      });
 
-      if (!result.Items || result.Items.length === 0) {
+      if (!session || !session.isActive) {
         return null;
       }
 
-      const { PK, SK, Type, ...session } = result.Items[0];
-      return session as Session;
+      return session;
     } catch (error) {
       logger.error('Error finding session by token hash', { error });
       throw error;
@@ -114,24 +76,9 @@ export class SessionRepository {
    */
   async findByUserId(userId: string): Promise<Session[]> {
     try {
-      const result = await docClient.send(
-        new QueryCommand({
-          TableName: TABLE_NAME,
-          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-          ExpressionAttributeValues: {
-            ':pk': `USER#${userId}`,
-            ':sk': 'SESSION#',
-          },
-        })
-      );
-
-      if (!result.Items) {
-        return [];
-      }
-
-      return result.Items.map((item) => {
-        const { PK, SK, Type, ...session } = item;
-        return session as Session;
+      return await prisma.session.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
       });
     } catch (error) {
       logger.error('Error finding sessions by user ID', { error, userId });
@@ -143,30 +90,32 @@ export class SessionRepository {
    * Get active sessions for a user
    */
   async findActiveByUserId(userId: string): Promise<Session[]> {
-    const sessions = await this.findByUserId(userId);
-    return sessions.filter((session) => session.isActive && new Date(session.expiresAt) > new Date());
+    return await prisma.session.findMany({
+      where: {
+        userId,
+        isActive: true,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /**
    * Update session activity
    */
   async updateActivity(sessionId: string, userId: string): Promise<void> {
-    const now = new Date().toISOString();
-
     try {
-      await docClient.send(
-        new UpdateCommand({
-          TableName: TABLE_NAME,
-          Key: {
-            PK: `USER#${userId}`,
-            SK: `SESSION#${sessionId}`,
-          },
-          UpdateExpression: 'SET lastActivityAt = :now, updatedAt = :now',
-          ExpressionAttributeValues: {
-            ':now': now,
-          },
-        })
-      );
+      await prisma.session.updateMany({
+        where: {
+          id: sessionId,
+          userId: userId,
+        },
+        data: {
+          lastActivityAt: new Date(),
+        },
+      });
     } catch (error) {
       logger.error('Error updating session activity', { error, sessionId, userId });
       throw error;
@@ -177,23 +126,16 @@ export class SessionRepository {
    * Deactivate session
    */
   async deactivate(sessionId: string, userId: string): Promise<void> {
-    const now = new Date().toISOString();
-
     try {
-      await docClient.send(
-        new UpdateCommand({
-          TableName: TABLE_NAME,
-          Key: {
-            PK: `USER#${userId}`,
-            SK: `SESSION#${sessionId}`,
-          },
-          UpdateExpression: 'SET isActive = :false, updatedAt = :now',
-          ExpressionAttributeValues: {
-            ':false': false,
-            ':now': now,
-          },
-        })
-      );
+      await prisma.session.updateMany({
+        where: {
+          id: sessionId,
+          userId: userId,
+        },
+        data: {
+          isActive: false,
+        },
+      });
 
       logger.info('Session deactivated', { sessionId, userId });
     } catch (error) {
@@ -206,14 +148,18 @@ export class SessionRepository {
    * Deactivate all sessions for a user
    */
   async deactivateAllByUserId(userId: string): Promise<void> {
-    const sessions = await this.findActiveByUserId(userId);
-
     try {
-      await Promise.all(
-        sessions.map((session) => this.deactivate(session.id, userId))
-      );
+      const result = await prisma.session.updateMany({
+        where: {
+          userId,
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+        },
+      });
 
-      logger.info('All sessions deactivated for user', { userId, count: sessions.length });
+      logger.info('All sessions deactivated for user', { userId, count: result.count });
     } catch (error) {
       logger.error('Error deactivating all sessions', { error, userId });
       throw error;
@@ -225,15 +171,12 @@ export class SessionRepository {
    */
   async delete(sessionId: string, userId: string): Promise<void> {
     try {
-      await docClient.send(
-        new DeleteCommand({
-          TableName: TABLE_NAME,
-          Key: {
-            PK: `USER#${userId}`,
-            SK: `SESSION#${sessionId}`,
-          },
-        })
-      );
+      await prisma.session.deleteMany({
+        where: {
+          id: sessionId,
+          userId: userId,
+        },
+      });
 
       logger.info('Session deleted', { sessionId, userId });
     } catch (error) {
@@ -247,38 +190,19 @@ export class SessionRepository {
    */
   async cleanupExpired(): Promise<number> {
     try {
-      const result = await docClient.send(
-        new ScanCommand({
-          TableName: TABLE_NAME,
-          FilterExpression: '#type = :type AND expiresAt < :now',
-          ExpressionAttributeNames: {
-            '#type': 'Type',
+      const result = await prisma.session.deleteMany({
+        where: {
+          expiresAt: {
+            lt: new Date(),
           },
-          ExpressionAttributeValues: {
-            ':type': 'Session',
-            ':now': new Date().toISOString(),
-          },
-        })
-      );
+        },
+      });
 
-      if (!result.Items || result.Items.length === 0) {
-        return 0;
-      }
-
-      // Delete expired sessions
-      await Promise.all(
-        result.Items.map((item) => {
-          const session = item as any;
-          return this.delete(session.id, session.userId);
-        })
-      );
-
-      logger.info('Expired sessions cleaned up', { count: result.Items.length });
-      return result.Items.length;
+      logger.info('Expired sessions cleaned up', { count: result.count });
+      return result.count;
     } catch (error) {
       logger.error('Error cleaning up expired sessions', { error });
       throw error;
     }
   }
 }
-

@@ -1,28 +1,32 @@
 {
   "name": "gemini-form-builder-backend",
-  "type": "module",
+  "type": "commonjs",
   "version": "1.0.0",
-  "description": "Node.js backend with OAuth, ABAC, DynamoDB, and subscription management",
+  "description": "Node.js backend with OAuth, ABAC, PostgreSQL, and subscription management",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "npx tsc",
+    "build": "prisma generate && npx tsc --noEmit false",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:prod": "prisma migrate deploy",
+    "prisma:studio": "prisma studio"
   },
   "keywords": [
     "oauth",
     "abac",
-    "dynamodb",
+    "postgresql",
+    "prisma",
     "subscription",
     "express"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.500.0",
-    "@aws-sdk/lib-dynamodb": "^3.500.0",
+    "@prisma/client": "^5.20.0",
     "@google/genai": "^1.28.0",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.6",
@@ -37,6 +41,7 @@
     "passport-google-oauth20": "^2.0.0",
     "ua-parser-js": "^1.0.37",
     "uuid": "^9.0.1",
+    "vercel": "^48.8.2",
     "winston": "^3.11.0",
     "zod": "^3.22.4"
   },
@@ -56,6 +61,7 @@
     "@typescript-eslint/parser": "^6.17.0",
     "eslint": "^8.56.0",
     "prettier": "^3.1.1",
+    "prisma": "^5.20.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }

@@ -1,8 +1,7 @@
-import { ABACPolicy } from '../types/abac.types';
+import { Policy as PrismaPolicy } from '@prisma/client';
 
-export interface PolicyModel extends ABACPolicy {
-  // Additional model-specific fields if needed
-}
+// Re-export Prisma type
+export type PolicyModel = PrismaPolicy;
 
 export interface PolicyAssignment {
   id: string;
@@ -13,5 +12,3 @@ export interface PolicyAssignment {
   assignedAt: string;
   expiresAt?: string;
 }
-
-

@@ -5,7 +5,7 @@ import { Subscription } from '../models/subscription.model';
 import { SubscriptionTier, BillingCycle, UsageBasedCharge, PlanType, QuotaLimits, QuotaUsage } from '../types/subscription.types';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { DynamoDBUtils } from '../utils/dynamodb.utils';
+import { generateId, getTimestamp } from '../utils/id.utils';
 
 export class SubscriptionService {
   private subscriptionRepository: SubscriptionRepository;
@@ -161,13 +161,13 @@ export class SubscriptionService {
       const overage = currentUsage.apiCallsMade - limits.apiCalls;
       const billableUnits = Math.ceil(overage / 100); // Per 100 API calls
       const charge: UsageBasedCharge = {
-        id: DynamoDBUtils.generateId('charge'),
+        id: generateId('charge'),
         type: 'api_calls',
         quantity: overage,
         unitPrice: config.pricing.per100ApiCalls,
         totalAmount: billableUnits * config.pricing.per100ApiCalls,
         description: `${overage} extra API calls`,
-        createdAt: DynamoDBUtils.getTimestamp(),
+        createdAt: getTimestamp(),
       };
       charges.push(charge);
     }
@@ -177,13 +177,13 @@ export class SubscriptionService {
       const overage = userStats.formCount - limits.forms;
       const billableUnits = Math.ceil(overage / 10); // Per 10 forms
       const charge: UsageBasedCharge = {
-        id: DynamoDBUtils.generateId('charge'),
+        id: generateId('charge'),
         type: 'forms',
         quantity: overage,
         unitPrice: config.pricing.per10Forms,
         totalAmount: billableUnits * config.pricing.per10Forms,
         description: `${overage} extra forms`,
-        createdAt: DynamoDBUtils.getTimestamp(),
+        createdAt: getTimestamp(),
       };
       charges.push(charge);
     }
@@ -361,7 +361,7 @@ export class SubscriptionService {
           apiCalls: 0,
           forms: 0,
           fields: 0,
-          lastUpdated: DynamoDBUtils.getTimestamp(),
+          lastUpdated: getTimestamp(),
         };
       }
 
@@ -369,7 +369,7 @@ export class SubscriptionService {
       const newUsage = currentUsage + amount;
       
       (subscription.quotaUsage[resourceType] as number) = newUsage;
-      subscription.quotaUsage.lastUpdated = DynamoDBUtils.getTimestamp();
+      subscription.quotaUsage.lastUpdated = getTimestamp();
 
       // Check if quota is exhausted
       const quotaLimits = subscription.quotaLimits!;
@@ -450,7 +450,7 @@ export class SubscriptionService {
       apiCalls: 0,
       forms: 0,
       fields: 0,
-      lastUpdated: DynamoDBUtils.getTimestamp(),
+      lastUpdated: getTimestamp(),
     };
 
     const updatedSubscription = await this.subscriptionRepository.update(subscription.id, {

@@ -1,26 +1,8 @@
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  avatar?: string;
-  role: 'user' | 'admin' | 'editor';
-  oauthProvider: 'google' | 'github';
-  oauthId: string;
-  subscriptionTier: 'free' | 'pro' | 'enterprise';
-  createdAt: string;
-  updatedAt: string;
-  lastLoginAt?: string;
-  metadata?: Record<string, any>;
-}
+import { User as PrismaUser, UserStats as PrismaUserStats } from '@prisma/client';
 
-export interface UserStats {
-  userId: string;
-  formCount: number;
-  fieldCount: number;
-  apiCallsThisMonth: number;
-  totalApiCalls: number;
-  storageUsed: number; // in bytes
-  lastUpdated: string;
-}
+// Re-export Prisma types for backward compatibility
+export type User = PrismaUser;
+export type UserStats = PrismaUserStats;
 
-
+// Export the Prisma types as named exports
+export { PrismaUser, PrismaUserStats };

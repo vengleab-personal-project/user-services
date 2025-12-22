@@ -1,6 +1,6 @@
 import { UsageRecord, UsageEvent } from '../models/usage.model';
-import { DynamoDBUtils } from '../utils/dynamodb.utils';
-import { TableNames } from '../config/dynamodb.config';
+import { prisma } from '../config/prisma.config';
+import { Prisma } from '@prisma/client';
 
 export class UsageRepository {
   /**
@@ -16,25 +16,29 @@ export class UsageRepository {
    */
   async getOrCreateCurrentMonthUsage(userId: string): Promise<UsageRecord> {
     const month = this.getCurrentMonth();
-    const key = { id: `${userId}#${month}` };
     
-    let usage = await DynamoDBUtils.get<UsageRecord>(TableNames.Usage, key);
+    let usage = await prisma.usageRecord.findUnique({
+      where: {
+        userId_month: {
+          userId,
+          month,
+        },
+      },
+    });
     
     if (!usage) {
-      usage = {
-        id: `${userId}#${month}`,
-        userId,
-        month,
-        formsCreated: 0,
-        fieldsGenerated: 0,
-        apiCallsMade: 0,
-        aiQuestionsGenerated: 0,
-        charges: [],
-        totalCharges: 0,
-        createdAt: DynamoDBUtils.getTimestamp(),
-        updatedAt: DynamoDBUtils.getTimestamp(),
-      };
-      await DynamoDBUtils.put(TableNames.Usage, usage);
+      usage = await prisma.usageRecord.create({
+        data: {
+          userId,
+          month,
+          formsCreated: 0,
+          fieldsGenerated: 0,
+          apiCallsMade: 0,
+          aiQuestionsGenerated: 0,
+          charges: [] as Prisma.InputJsonValue,
+          totalCharges: 0,
+        },
+      });
     }
     
     return usage;
@@ -44,19 +48,24 @@ export class UsageRepository {
    * Find usage record by user and month
    */
   async findByUserAndMonth(userId: string, month: string): Promise<UsageRecord | null> {
-    return await DynamoDBUtils.get<UsageRecord>(TableNames.Usage, { id: `${userId}#${month}` });
+    return await prisma.usageRecord.findUnique({
+      where: {
+        userId_month: {
+          userId,
+          month,
+        },
+      },
+    });
   }
 
   /**
    * Find all usage records for a user
    */
   async findByUserId(userId: string): Promise<UsageRecord[]> {
-    return await DynamoDBUtils.query<UsageRecord>(
-      TableNames.Usage,
-      'begins_with(#id, :userId)',
-      { '#id': 'id' },
-      { ':userId': `${userId}#` }
-    );
+    return await prisma.usageRecord.findMany({
+      where: { userId },
+      orderBy: { month: 'desc' },
+    });
   }
 
   /**
@@ -67,19 +76,22 @@ export class UsageRepository {
     field: 'formsCreated' | 'fieldsGenerated' | 'apiCallsMade' | 'aiQuestionsGenerated',
     amount: number = 1
   ): Promise<UsageRecord> {
-    const usage = await this.getOrCreateCurrentMonthUsage(userId);
-    const currentValue = usage[field] || 0;
+    await this.getOrCreateCurrentMonthUsage(userId);
+    const month = this.getCurrentMonth();
     
-    const updatedUsage = await DynamoDBUtils.update(
-      TableNames.Usage,
-      { id: usage.id },
-      {
-        [field]: currentValue + amount,
-        updatedAt: DynamoDBUtils.getTimestamp(),
-      }
-    );
-    
-    return updatedUsage as UsageRecord;
+    return await prisma.usageRecord.update({
+      where: {
+        userId_month: {
+          userId,
+          month,
+        },
+      },
+      data: {
+        [field]: {
+          increment: amount,
+        },
+      },
+    });
   }
 
   /**
@@ -87,52 +99,49 @@ export class UsageRepository {
    */
   async addCharge(userId: string, charge: any): Promise<UsageRecord> {
     const usage = await this.getOrCreateCurrentMonthUsage(userId);
-    const charges = [...usage.charges, charge];
+    const month = this.getCurrentMonth();
+    
+    const charges = Array.isArray(usage.charges) ? [...(usage.charges as any[]), charge] : [charge];
     const totalCharges = charges.reduce((sum, c) => sum + c.totalAmount, 0);
     
-    const updatedUsage = await DynamoDBUtils.update(
-      TableNames.Usage,
-      { id: usage.id },
-      {
-        charges,
+    return await prisma.usageRecord.update({
+      where: {
+        userId_month: {
+          userId,
+          month,
+        },
+      },
+      data: {
+        charges: charges as Prisma.InputJsonValue,
         totalCharges,
-        updatedAt: DynamoDBUtils.getTimestamp(),
-      }
-    );
-    
-    return updatedUsage as UsageRecord;
+      },
+    });
   }
 
   /**
    * Create usage event
    */
-  async createEvent(eventData: Partial<UsageEvent>): Promise<UsageEvent> {
-    const event: UsageEvent = {
-      id: DynamoDBUtils.generateId('event'),
-      userId: eventData.userId || '',
-      eventType: eventData.eventType || 'api_call',
-      resourceId: eventData.resourceId,
-      metadata: eventData.metadata || {},
-      timestamp: DynamoDBUtils.getTimestamp(),
-    };
-
-    await DynamoDBUtils.put(TableNames.Usage, { ...event, SK: 'EVENT' });
-    return event;
+  async createEvent(eventData: Partial<Omit<UsageEvent, 'id' | 'timestamp'>>): Promise<UsageEvent> {
+    return await prisma.usageEvent.create({
+      data: {
+        userId: eventData.userId || '',
+        eventType: eventData.eventType || 'api_call',
+        category: eventData.category as any,
+        units: eventData.units as any,
+        resourceId: eventData.resourceId,
+        metadata: eventData.metadata as Prisma.InputJsonValue || {},
+      },
+    });
   }
 
   /**
    * Get usage events for a user
    */
   async getEvents(userId: string, limit: number = 100): Promise<UsageEvent[]> {
-    return await DynamoDBUtils.query<UsageEvent>(
-      TableNames.Usage,
-      '#userId = :userId AND #sk = :sk',
-      { '#userId': 'userId', '#sk': 'SK' },
-      { ':userId': userId, ':sk': 'EVENT' },
-      undefined,
-      limit
-    );
+    return await prisma.usageEvent.findMany({
+      where: { userId },
+      orderBy: { timestamp: 'desc' },
+      take: limit,
+    });
   }
 }
-
-

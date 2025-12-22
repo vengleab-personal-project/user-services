@@ -3,7 +3,7 @@ import { ABACPolicy } from '../types/abac.types';
 /**
  * Default ABAC Policies
  * These are baseline policies loaded on startup
- * Custom policies can be added per-user in DynamoDB
+ * Custom policies can be added per-user in PostgreSQL
  */
 export const defaultPolicies: ABACPolicy[] = [
   // Form ownership policies

@@ -68,7 +68,7 @@ export class SessionService {
       browser,
       os,
       location: metadata?.location,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: expiresAt, // Can be Date or ISO string
     };
 
     return await this.sessionRepository.create(input);
@@ -130,8 +130,8 @@ export class SessionService {
       return null;
     }
 
-    // Check if session is expired
-    if (new Date(session.expiresAt) <= new Date()) {
+    // Check if session is expired (session.expiresAt is a Date object from Prisma)
+    if (session.expiresAt <= new Date()) {
       await this.revokeSession(session.id, session.userId);
       return null;
     }

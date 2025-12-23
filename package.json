@@ -5,8 +5,7 @@
   "description": "Node.js backend with OAuth, ABAC, PostgreSQL, and subscription management",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "vc:dev": "vercel dev",
+    "dev": "vercel dev --listen PORT",
     "build": "prisma generate && npx tsc --noEmit false",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",

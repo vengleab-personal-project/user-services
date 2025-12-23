@@ -21,6 +21,9 @@ import { quotaRouter } from './routes/quota.routes';
 export const createApp = (): Application => {
   const app = express();
 
+  // Trust proxy headers (needed for Vercel/forwarded IPs so rate limiting works correctly)
+  app.set('trust proxy', 1);
+
   // Security middleware
   app.use(helmet({
     contentSecurityPolicy: {

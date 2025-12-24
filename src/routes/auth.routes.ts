@@ -15,19 +15,25 @@ const sessionService = new SessionService();
 /**
  * Google OAuth
  */
-router.get('/google', strictRateLimiter, passport.authenticate('google', { scope: ['profile', 'email'] }));
+router.get('/google', strictRateLimiter, (req, res, next) => {
+  const redirectBase = (req.query.redirect as string) || config.frontend.url;
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    state: encodeURIComponent(redirectBase),
+  })(req, res, next);
+});
 
-router.get(
-  '/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: `${config.frontend.secondaryUrl}/?error=oauth_failed` }),
-  asyncHandler(async (req: Request, res: Response) => {
-    if (!req.user) {
-      res.redirect(`${config.frontend.secondaryUrl}/?error=no_user`);
+router.get('/google/callback', (req, res, next) => {
+  const redirectBase = req.query.state ? decodeURIComponent(req.query.state as string) : config.frontend.url;
+
+  passport.authenticate('google', { session: false }, async (err: any, user: any) => {
+    if (err || !user) {
+      res.redirect(`${redirectBase}/login?error=oauth_failed`);
       return;
     }
 
     // Type assertion to extend req.user with the expected OAuth profile properties
-    const oauthUser = req.user as typeof req.user & {
+    const oauthUser = user as typeof user & {
       oauthId: string;
       email?: string;
       name?: string;
@@ -47,27 +53,32 @@ router.get(
       }
     );
 
-    // Redirect to ai-form-builder (secondary frontend) with tokens
-    res.redirect(`${config.frontend.secondaryUrl}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
-  })
-);
+    res.redirect(`${redirectBase}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
+  })(req, res, next);
+});
 
 /**
  * GitHub OAuth
  */
-router.get('/github', strictRateLimiter, passport.authenticate('github', { scope: ['user:email'] }));
+router.get('/github', strictRateLimiter, (req, res, next) => {
+  const redirectBase = (req.query.redirect as string) || config.frontend.url;
+  passport.authenticate('github', {
+    scope: ['user:email'],
+    state: encodeURIComponent(redirectBase),
+  })(req, res, next);
+});
 
-router.get(
-  '/github/callback',
-  passport.authenticate('github', { session: false, failureRedirect: `${config.frontend.url}/login?error=oauth_failed` }),
-  asyncHandler(async (req: Request, res: Response) => {
-    if (!req.user) {
-      res.redirect(`${config.frontend.url}/login?error=no_user`);
+router.get('/github/callback', (req, res, next) => {
+  const redirectBase = req.query.state ? decodeURIComponent(req.query.state as string) : config.frontend.url;
+
+  passport.authenticate('github', { session: false }, async (err: any, user: any) => {
+    if (err || !user) {
+      res.redirect(`${redirectBase}/login?error=oauth_failed`);
       return;
     }
 
     // Type assertion to extend req.user with the expected OAuth profile properties
-    const oauthUser = req.user as typeof req.user & {
+    const oauthUser = user as typeof user & {
       oauthId: string;
       email?: string;
       name?: string;
@@ -87,10 +98,9 @@ router.get(
       }
     );
 
-    // Redirect to frontend with tokens
-    res.redirect(`${config.frontend.url}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
-  })
-);
+    res.redirect(`${redirectBase}/auth/callback?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
+  })(req, res, next);
+});
 
 /**
  * Verify access token (for genai-service)
@@ -225,12 +235,10 @@ router.post(
     }
     const { exceptCurrentSession } = req.body;
     const currentSessionId = exceptCurrentSession ? req.body.currentSessionId : undefined;
-    
+
     await sessionService.revokeAllSessions(userId, currentSessionId);
     res.json({ message: 'All sessions revoked successfully' });
   })
 );
 
 export default router;
-
-
